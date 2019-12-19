@@ -25,21 +25,28 @@
  	for(int i = 0; i < size; i++){
  		vec1[i] = i;
 	}
- 	cudaMalloc((void**)&cuvec1,cusize * sizeof(int));
- 	int begin = 0;
+ 	cudaMalloc((void**)&cuvec1, 2 * cusize * sizeof(int));
+	cudaMemcpy(cuvec1, vec1, cusize * sizeof(int), cudaMemcpyHostToDevice);
+
+ 	int begin = cusize;
  	int block = 32;
+	int useSeg = 1;
  	int grid = cusize/block;
  	while(begin < size){
 		cudaStreamCreate(&stream1);
         	cudaStreamCreate(&stream2);
- 		cudaMemcpyAsync(cuvec1, vec1 + begin, cusize * sizeof(int), cudaMemcpyHostToDevice,stream1);
- 		kernel<<<grid,block,0,stream2>>>(cuvec1,cusize);
- 		cudaMemcpyAsync(vec1 + begin, cuvec1, cusize*sizeof(int), cudaMemcpyDeviceToHost,stream1);
+ 		cudaMemcpyAsync(cuvec1 + (useSeg) * cusize, vec1 + begin, cusize * sizeof(int), cudaMemcpyHostToDevice,stream1);
+ 		kernel<<<grid,block,0,stream2>>>(cuvec1 + (1 - useSeg) * cusize,cusize);
+ 		cudaMemcpyAsync(vec1 + (begin - cusize), cuvec1 + (1 - useSeg) * cusize, cusize*sizeof(int), cudaMemcpyDeviceToHost,stream1);
 		cudaDeviceSynchronize();
 		cudaStreamDestroy(stream1);
         	cudaStreamDestroy(stream2);
  		begin += cusize;
+		useSeg = 1 - useSeg;
 	 }
+		
+	kernel<<<grid,block>>>(cuvec1 + (1 - useSeg) * cusize,cusize);
+	cudaMemcpy(vec1 + (begin - cusize), cuvec1 + (1 - useSeg) * cusize, cusize*sizeof(int), cudaMemcpyDeviceToHost);
 	 for(int i = 0; i < size; i++){
 	 	cout << vec1[i] << " ";
 	 }
